@@ -506,9 +506,9 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 	}
 
 	defer func() {
-		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
-			log.Errorf("failed to reload schema %v", err)
-		}
+		//if err := qre.tsv.se.Reload(qre.ctx); err != nil {
+		//	log.Errorf("failed to reload schema %v", err)
+		//}
 	}()
 
 	sql := qre.query
