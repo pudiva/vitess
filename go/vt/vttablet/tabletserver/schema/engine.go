@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -332,15 +333,28 @@ func (se *Engine) reload(ctx context.Context) error {
 	if se.SkipMetaCheck {
 		return nil
 	}
+
+	f, err := os.OpenFile("/tmp/BOO", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+	if err != nil {
+		panic(err)
+	}
+	defer f.Close()
+
+	t0 := time.Now().UnixMicro()
+
 	tableData, err := conn.Exec(ctx, conn.BaseShowTables(), maxTableCount, false)
 	if err != nil {
 		return err
 	}
 
+	t1 := time.Now().UnixMicro()
+
 	err = se.updateInnoDBRowsRead(ctx, conn)
 	if err != nil {
 		return err
 	}
+
+	t2 := time.Now().UnixMicro()
 
 	rec := concurrency.AllErrorRecorder{}
 	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
@@ -409,6 +423,9 @@ func (se *Engine) reload(ctx context.Context) error {
 			se.tableAllocatedSizeGauge.Reset(tableName)
 		}
 	}
+
+	t3 := time.Now().UnixMicro()
+	fmt.Fprintf(f, "%d, %d, %d\n", t1-t0, t2-t1, t3-t2)
 
 	// Populate PKColumns for changed tables.
 	if err := se.populatePrimaryKeys(ctx, conn, changedTables); err != nil {
