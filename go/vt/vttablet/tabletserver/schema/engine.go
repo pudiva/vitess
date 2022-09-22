@@ -313,7 +313,29 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position, opt ...int) 
 }
 
 // reload reloads the schema. It can also be used to initialize it.
-func (se *Engine) reload(ctx context.Context, qre ...int) error {
+func (se *Engine) reload(ctx context.Context, opt ...int) error {
+	t0 := time.Now().UnixMicro()
+	t1 := t0
+	t2 := t0
+	t3 := t0
+	t4 := t0
+	t5 := t0
+	t6 := t0
+	t7 := t0
+
+	defer func() {
+		t7 = time.Now().UnixMicro()
+		if 0 < len(opt) && opt[0] == 666 {
+			f, err := os.OpenFile("/tmp/BOO", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+			if err != nil {
+				panic(err)
+			}
+
+			fmt.Fprintf(f, "%d, %d, %d, %d, %d, %d, %d, %d\n", t0, t1, t2, t3, t4, t5, t6, t7)
+			f.Close()
+		}
+	}()
+
 	defer func() {
 		se.env.LogError()
 	}()
@@ -334,21 +356,21 @@ func (se *Engine) reload(ctx context.Context, qre ...int) error {
 		return nil
 	}
 
-	t0 := time.Now().UnixMicro()
+	t1 = time.Now().UnixMicro()
 
 	tableData, err := conn.Exec(ctx, conn.BaseShowTables(), maxTableCount, false)
 	if err != nil {
 		return err
 	}
 
-	t1 := time.Now().UnixMicro()
+	t2 = time.Now().UnixMicro()
 
 	err = se.updateInnoDBRowsRead(ctx, conn)
 	if err != nil {
 		return err
 	}
 
-	t2 := time.Now().UnixMicro()
+	t3 = time.Now().UnixMicro()
 
 	rec := concurrency.AllErrorRecorder{}
 	// curTables keeps track of tables in the new snapshot so we can detect what was dropped.
@@ -405,6 +427,8 @@ func (se *Engine) reload(ctx context.Context, qre ...int) error {
 		return rec.Error()
 	}
 
+	t4 = time.Now().UnixMicro()
+
 	// Compute and handle dropped tables.
 	var dropped []string
 	for tableName := range se.tables {
@@ -418,22 +442,14 @@ func (se *Engine) reload(ctx context.Context, qre ...int) error {
 		}
 	}
 
-	t3 := time.Now().UnixMicro()
-
-	if 0 < len(qre) && qre[0] == 666 {
-		f, err := os.OpenFile("/tmp/BOO", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
-		if err != nil {
-			panic(err)
-		}
-		defer f.Close()
-
-		fmt.Fprintf(f, "%d, %d, %d\n", t1-t0, t2-t1, t3-t2)
-	}
+	t5 = time.Now().UnixMicro()
 
 	// Populate PKColumns for changed tables.
 	if err := se.populatePrimaryKeys(ctx, conn, changedTables); err != nil {
 		return err
 	}
+
+	t6 = time.Now().UnixMicro()
 
 	// Update se.tables
 	for k, t := range changedTables {
