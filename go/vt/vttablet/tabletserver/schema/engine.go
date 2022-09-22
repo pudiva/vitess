@@ -286,15 +286,15 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
-func (se *Engine) Reload(ctx context.Context) error {
-	return se.ReloadAt(ctx, mysql.Position{})
+func (se *Engine) Reload(ctx context.Context, opt ...int) error {
+	return se.ReloadAt(ctx, mysql.Position{}, opt...)
 }
 
 // ReloadAt reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
 // It maintains the position at which the schema was reloaded and if the same position is provided
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
-func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
+func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position, opt ...int) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
@@ -305,7 +305,7 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 		log.V(2).Infof("ReloadAt: found cached schema at %s", mysql.EncodePosition(pos))
 		return nil
 	}
-	if err := se.reload(ctx); err != nil {
+	if err := se.reload(ctx, opt...); err != nil {
 		return err
 	}
 	se.reloadAtPos = pos
@@ -313,7 +313,7 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 }
 
 // reload reloads the schema. It can also be used to initialize it.
-func (se *Engine) reload(ctx context.Context) error {
+func (se *Engine) reload(ctx context.Context, qre ...int) error {
 	defer func() {
 		se.env.LogError()
 	}()
@@ -333,12 +333,6 @@ func (se *Engine) reload(ctx context.Context) error {
 	if se.SkipMetaCheck {
 		return nil
 	}
-
-	f, err := os.OpenFile("/tmp/BOO", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
 
 	t0 := time.Now().UnixMicro()
 
@@ -425,7 +419,16 @@ func (se *Engine) reload(ctx context.Context) error {
 	}
 
 	t3 := time.Now().UnixMicro()
-	fmt.Fprintf(f, "%d, %d, %d\n", t1-t0, t2-t1, t3-t2)
+
+	if 0 < len(qre) && qre[0] == 666 {
+		f, err := os.OpenFile("/tmp/BOO", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			panic(err)
+		}
+		defer f.Close()
+
+		fmt.Fprintf(f, "%d, %d, %d\n", t1-t0, t2-t1, t3-t2)
+	}
 
 	// Populate PKColumns for changed tables.
 	if err := se.populatePrimaryKeys(ctx, conn, changedTables); err != nil {
