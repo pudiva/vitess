@@ -353,12 +353,6 @@ func (se *Engine) reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
-		fileSize, _ := evalengine.ToUint64(row[4])
-		allocatedSize, _ := evalengine.ToUint64(row[5])
-
-		// publish the size metrics
-		se.tableFileSizeGauge.Set(tableName, int64(fileSize))
-		se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
 
 		// Table schemas are cached by tabletserver. For each table we cache `information_schema.tables.create_time` (`tbl.CreateTime`).
 		// We also record the last time the schema was loaded (`se.lastChange`). Both are in seconds. We reload a table only when:
@@ -372,8 +366,6 @@ func (se *Engine) reload(ctx context.Context) error {
 		//      #1 will not identify the renamed table as a changed one.
 		tbl, isInTablesMap := se.tables[tableName]
 		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange {
-			tbl.FileSize = fileSize
-			tbl.AllocatedSize = allocatedSize
 			continue
 		}
 
@@ -383,8 +375,6 @@ func (se *Engine) reload(ctx context.Context) error {
 			rec.RecordError(err)
 			continue
 		}
-		table.FileSize = fileSize
-		table.AllocatedSize = allocatedSize
 		table.CreateTime = createTime
 		changedTables[tableName] = table
 		if isInTablesMap {
@@ -405,8 +395,6 @@ func (se *Engine) reload(ctx context.Context) error {
 			delete(se.tables, tableName)
 			// We can't actually delete the label from the stats, but we can set it to 0.
 			// Many monitoring tools will drop zero-valued metrics.
-			se.tableFileSizeGauge.Reset(tableName)
-			se.tableAllocatedSizeGauge.Reset(tableName)
 		}
 	}
 
